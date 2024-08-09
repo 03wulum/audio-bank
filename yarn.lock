@@ -5891,7 +5891,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-file-system@npm:~17.0.1":
+"expo-file-system@npm:^17.0.1, expo-file-system@npm:~17.0.1":
   version: 17.0.1
   resolution: "expo-file-system@npm:17.0.1"
   peerDependencies:
@@ -8974,6 +8974,7 @@ __metadata:
     eslint: ^8.19.0
     expo: ^51.0.25
     expo-av: ~14.0.6
+    expo-file-system: ^17.0.1
     expo-google-sign-in: ^11.0.0
     jest: ^29.6.3
     prettier: 2.8.8
