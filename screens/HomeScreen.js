@@ -1,5 +1,6 @@
 /* eslint-disable prettier/prettier */
-import React, {useState, useEffect, useRef} from 'react';
+
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,40 +8,29 @@ import {
   TextInput,
   StyleSheet,
 } from 'react-native';
-import {Audio} from 'expo-av'; // Using expo-av for audio recording
-import {saveAudioFile} from '../utils/audioUtils';
+import { Audio } from 'expo-av'; // Using expo-av for audio recording
+import { saveAudioFile } from '../utils/audioUtils';
 
-const HomeScreen = ({onTranscriptionComplete}) => {
+const HomeScreen = ({ onTranscriptionComplete, navigation }) => {
   const [recording, setRecording] = useState(null);
   const [transcription, setTranscription] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const recognizerRef = useRef(null);
+  const [title, setTitle] = useState('');
 
   const startRecording = async () => {
     try {
-      const {granted} = await Audio.requestPermissionsAsync();
+      const { granted } = await Audio.requestPermissionsAsync();
       if (granted) {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(
-          Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY,
+        const newRecording = new Audio.Recording();
+        await newRecording.prepareToRecordAsync(
+          Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
         );
-        recording.setOnRecordingStatusUpdate(async status => {
-          if (status.isRecording && recognizerRef.current) {
-            const audioChunk = await recording.getURI();
-            // Convert the audio chunk to the format required by Vosk and recognize
-            const result = recognizerRef.current.AcceptWaveform(audioChunk);
-            if (result) {
-              const {text} = recognizerRef.current.Result();
-              setTranscription(prev => prev + ' ' + text);
-            }
-          }
-        });
-        await recording.startAsync();
-        setRecording(recording);
+        await newRecording.startAsync();
+        setRecording(newRecording);
         setIsRecording(true);
       } else {
         alert('Permission to access microphone is required!');
@@ -63,9 +53,17 @@ const HomeScreen = ({onTranscriptionComplete}) => {
   };
 
   const handleSave = async (uri) => {
-    const audioUri = uri;
-    const filename = 'audio-log-001';
-    const savedUri = await saveAudioFile(audioUri, filename);
+    const defaultTitle = new Date().toISOString(); // Use ISO string for date-time-based default title
+    const audioTitle = title || defaultTitle;
+    const filename = `${audioTitle}.wav`;
+    const savedUri = await saveAudioFile(uri, filename);
+
+    // Pass the saved recording to the TranscriptionsScreen
+    navigation.navigate('Transcriptions', {
+      newRecording: { uri: savedUri, title: audioTitle },
+    });
+
+    setTitle(''); // Reset title input
     console.log('Audio file saved at:', savedUri);
   };
 
@@ -81,6 +79,23 @@ const HomeScreen = ({onTranscriptionComplete}) => {
           editable={!isRecording}
         />
       </View>
+      <View style={styles.titleContainer}>
+        <TextInput
+          style={styles.titleInput}
+          placeholder="Enter title..."
+          value={title}
+          onChangeText={setTitle}
+        />
+        <TouchableOpacity onPress={() => setTitle('')}>
+          <Text>❌</Text>
+        </TouchableOpacity>
+        {recording && (
+          <TouchableOpacity onPress={() => handleSave(recording.getURI())}>
+            <Text>✅</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       <TouchableOpacity
         style={styles.audioButton}
         onPress={isRecording ? stopRecording : startRecording}>
@@ -88,18 +103,6 @@ const HomeScreen = ({onTranscriptionComplete}) => {
           {isRecording ? 'Pause' : 'Record'}
         </Text>
       </TouchableOpacity>
-      {isRecording && (
-        <>
-          <TouchableOpacity style={styles.optionButton} onPress={stopRecording}>
-            <Text>Finish Transcription</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.optionButton}
-            onPress={() => setTranscription('')}>
-            <Text>Delete</Text>
-          </TouchableOpacity>
-        </>
-      )}
     </View>
   );
 };
@@ -133,12 +136,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
   },
-  optionButton: {
-    margin: 10,
-    padding: 10,
-    backgroundColor: '#ccc',
-    borderRadius: 5,
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  titleInput: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderColor: '#ccc',
+    marginRight: 10,
   },
 });
 
 export default HomeScreen;
+
