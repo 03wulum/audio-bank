@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import React, {useState} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import {Audio} from 'expo-av'; // Using expo-av for audio recording
+import {saveAudioFile} from '../utils/audioUtils';
 
-const HomeScreen = () => {
+const HomeScreen = ({onTranscriptionComplete}) => {
   const [recording, setRecording] = useState(null);
   const [transcription, setTranscription] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const recognizerRef = useRef(null);
 
   const startRecording = async () => {
     try {
@@ -22,9 +24,22 @@ const HomeScreen = () => {
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
-        const {recording} = await Audio.Recording.createAsync(
+        const recording = new Audio.Recording();
+        await recording.prepareToRecordAsync(
           Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY,
         );
+        recording.setOnRecordingStatusUpdate(async status => {
+          if (status.isRecording && recognizerRef.current) {
+            const audioChunk = await recording.getURI();
+            // Convert the audio chunk to the format required by Vosk and recognize
+            const result = recognizerRef.current.AcceptWaveform(audioChunk);
+            if (result) {
+              const {text} = recognizerRef.current.Result();
+              setTranscription(prev => prev + ' ' + text);
+            }
+          }
+        });
+        await recording.startAsync();
         setRecording(recording);
         setIsRecording(true);
       } else {
@@ -36,12 +51,22 @@ const HomeScreen = () => {
   };
 
   const stopRecording = async () => {
-    setRecording(undefined);
-    setIsRecording(false);
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    console.log('Recording stopped and stored at', uri);
-    // Transcription logic here
+    if (recording) {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      console.log('Recording stopped and stored at', uri);
+      handleSave(uri);
+      setRecording(null);
+      onTranscriptionComplete(transcription);
+    }
+  };
+
+  const handleSave = async (uri) => {
+    const audioUri = uri;
+    const filename = 'audio-log-001';
+    const savedUri = await saveAudioFile(audioUri, filename);
+    console.log('Audio file saved at:', savedUri);
   };
 
   return (
@@ -53,6 +78,7 @@ const HomeScreen = () => {
           placeholder="Transcription appears here..."
           value={transcription}
           onChangeText={setTranscription}
+          editable={!isRecording}
         />
       </View>
       <TouchableOpacity
